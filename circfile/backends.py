@@ -40,7 +40,7 @@ class Backend:
         """
         raise NotImplementedError
 
-    def copy_file(self, target_file, location_to_paste):
+    def upload_file(self, target_file, location_to_paste):
         """Paste a copy of the specified file at the location given
         To be overridden by subclass
         """
@@ -104,6 +104,7 @@ class WebBackend(Backend):
             ) from exc
 
         self.FS_PATH = "fs/"
+        
         self.LIB_DIR_PATH = f"{self.FS_PATH}lib/"
         self.host = host
         self.password = password
@@ -113,7 +114,9 @@ class WebBackend(Backend):
         self.session.mount(self.device_location, HTTPAdapter(max_retries=5))
         self.library_path = self.device_location + "/" + self.LIB_DIR_PATH
         self.timeout = timeout
-
+        self.FS_URL = urljoin(self.device_location, self.FS_PATH)
+        
+        
     def install_file_http(self, source, location=None):
         """
         Install file to device using web workflow.
@@ -213,7 +216,13 @@ class WebBackend(Backend):
                 _writeable_error()
             r.raise_for_status()
 
-    def copy_file(self, target_file, location_to_paste):
+    def upload_file(self, target_file, location_to_paste):
+        """
+        copy a file from the host PC to the microcontroller
+        :param target_file: file on the host PC to copy
+        :param location_to_paste: Location on the microcontroller to paste it.
+        :return: 
+        """
         if os.path.isdir(target_file):
             create_directory_url = urljoin(
                 self.device_location,
@@ -224,7 +233,31 @@ class WebBackend(Backend):
         else:
             self.install_file_http(target_file)
 
+    def download_file(self, target_file, location_to_paste):
+        """
+        Download a file from the MCU device to the local host PC
+        :param target_file: The file on the MCU to download
+        :param location_to_paste: The location on the host PC to put the downloaded copy.
+        :return: 
+        """
+        auth = HTTPBasicAuth("", self.password)
+        with self.session.get(self.FS_URL + target_file, timeout=self.timeout, auth=auth) as r:
+            if r.status_code == 404:
+                click.secho(f"{target_file} was not found on the device", "red")
+            
+            
+            file_name = target_file.split("/")[-1]
+            if location_to_paste is None:
+                with open(file_name, "wb") as f:
+                    f.write(r.content)
+                
+                click.echo(f"Downloaded File: {file_name}")
+            else:
+                with open(os.path.join(location_to_paste, file_name), "wb") as f:
+                    f.write(r.content)
 
+                click.echo(f"Downloaded File: {os.path.join(location_to_paste, file_name)}")
+    
     def uninstall(self, device_path, module_path):
         """
         Uninstall given module on device using REST API.
@@ -346,9 +379,10 @@ class WebBackend(Backend):
     def list_dir(self, dirpath):
         auth = HTTPBasicAuth("", self.password)
         with self.session.get(
-                urljoin(self.device_location, "fs/"),
+                urljoin(self.device_location, f"fs/{dirpath if dirpath else ''}"),
                 auth=auth,
                 headers={"Accept": "application/json"},
                 timeout=self.timeout,
         ) as r:
+            print(r.content)
             return r.json()["files"]

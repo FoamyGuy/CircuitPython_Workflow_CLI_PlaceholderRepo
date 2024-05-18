@@ -155,7 +155,10 @@ def ls_cli(ctx, file):  # pragma: no cover
     if not supplied.
     """
     logger.info("ls")
+    if not file.endswith("/"):
+        file += "/"
     click.echo(f"running: ls {file}")
+    
     files = ctx.obj["backend"].list_dir(file)
     click.echo(f"Size\tName")
     for cur_file in sorted_by_directory_then_alpha(files):
@@ -184,11 +187,17 @@ def put_cli(ctx, file, location, overwrite):
 
 @main.command("get")
 @click.argument("file", required=True, nargs=1)
-@click.argument("location", required=False, nargs=2)
-def get_cli(file, location):  # pragma: no cover
+@click.argument("location", required=False, nargs=1)
+@click.pass_context
+def get_cli(ctx, file, location):  # pragma: no cover
     """
     Download a copy of a file or directory from the device to the local computer.
     """
+    #click.echo(f"file: {file}")
+    #click.echo(f"location: {location}")
+    click.echo(f"running: get {file} {location}")
+    
+    ctx.obj["backend"].download_file(file, location)
     pass
 
 
